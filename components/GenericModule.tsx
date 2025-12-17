@@ -609,6 +609,7 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
     const [examGenStep, setExamGenStep] = useState(1);
     const [selectedExamSubjects, setSelectedExamSubjects] = useState<string[]>([]);
     const [examDayDates, setExamDayDates] = useState<Record<number, string>>({});
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
     const currentTimetable = settings?.classTimetables?.[schoolClass] || {};
     const grid = currentTimetable.grid || {};
@@ -644,7 +645,108 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
         updateTimetableState({ grid: newGrid });
     };
 
-    const generateTimetable = () => { /* Logic defined elsewhere */ };
+    const generateTimetable = () => {
+        const totalPeriodsPerDay = constraints.extraTuitionActive ? 8 : 7;
+        const newGrid: Record<string, Record<number, BasicSlotData>> = {};
+        
+        // 1. Initialize empty grid
+        DAYS.forEach(day => {
+            newGrid[day] = {};
+            for (let i = 0; i < totalPeriodsPerDay; i++) {
+                newGrid[day][i] = { type: 'Lesson', subject: '', facilitatorId: '' };
+            }
+        });
+
+        // 2. Handle Fixed Activities
+        // Monday P1: Worship
+        if (constraints.fixedActivities?.worship) {
+            newGrid['Monday'][0] = { type: 'Fixed', subject: 'Worship', fixedLabel: 'Worship' };
+        }
+        // Singing/Hymns - Arbitrary Assignment (e.g., Tuesday P1)
+        if (constraints.fixedActivities?.singingHymns) {
+            newGrid['Tuesday'][0] = { type: 'Fixed', subject: 'Singing/Hymns', fixedLabel: 'Singing/Hymns' };
+        }
+        // PLC Meeting: Wednesday P7
+        if (constraints.fixedActivities?.plc) {
+            newGrid['Wednesday'][6] = { type: 'Fixed', subject: 'PLC Meeting', fixedLabel: 'PLC Meeting' };
+        }
+        // Club Activity: Friday P7
+        if (constraints.fixedActivities?.club) {
+            newGrid['Friday'][6] = { type: 'Fixed', subject: 'Club Activity', fixedLabel: 'Club Activity' };
+        }
+        // Extra Tuition: P8 if active
+        if (constraints.extraTuitionActive) {
+            DAYS.forEach(day => {
+                newGrid[day][7] = { type: 'Fixed', subject: 'Extra Tuition', fixedLabel: 'Extra Tuition' };
+            });
+        }
+
+        // 3. Collect Demands into a Pool
+        const lessonPool: string[] = [];
+        Object.entries(demands).forEach(([sub, count]) => {
+            for (let i = 0; i < count; i++) {
+                lessonPool.push(sub);
+            }
+        });
+
+        // Shuffle pool
+        for (let i = lessonPool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [lessonPool[i], lessonPool[j]] = [lessonPool[j], lessonPool[i]];
+        }
+
+        // 4. Fill remaining Lesson slots
+        let poolIdx = 0;
+        DAYS.forEach(day => {
+            for (let i = 0; i < totalPeriodsPerDay; i++) {
+                // Only fill if not already fixed or a break (P4 usually break)
+                if (i === 3) {
+                   newGrid[day][i] = { type: 'Fixed', subject: 'Break', fixedLabel: 'Break' };
+                   continue;
+                }
+                
+                if (newGrid[day][i].type === 'Lesson' && poolIdx < lessonPool.length) {
+                    const sub = lessonPool[poolIdx++];
+                    const staff = settings?.staffList?.find(s => s.subjects?.includes(sub));
+                    const facName = staff ? staff.name : (settings?.facilitatorMapping?.[sub] || 'TBA');
+                    newGrid[day][i] = { type: 'Lesson', subject: sub, facilitatorId: facName };
+                }
+            }
+        });
+
+        updateTimetableState({ grid: newGrid });
+        alert("Timetable Auto-Generated based on current demands and constraints.");
+    };
+
+    const handleSharePDF = async () => {
+        setIsGeneratingPDF(true);
+        const element = document.getElementById('timetable-print-area');
+        if (!element) return;
+
+        // @ts-ignore
+        if (typeof window.html2pdf === 'undefined') {
+            alert("PDF library not loaded.");
+            setIsGeneratingPDF(false);
+            return;
+        }
+
+        const opt = {
+            margin: 10,
+            filename: `Timetable_${schoolClass}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        try {
+            // @ts-ignore
+            await window.html2pdf().set(opt).from(element).save();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsGeneratingPDF(false);
+        }
+    };
 
     const renderExamTimetableGenerator = () => {
         const handleSubjectToggle = (sub: string) => { setSelectedExamSubjects(prev => prev.includes(sub) ? prev.filter(s => s !== sub) : [...prev, sub]); };
@@ -788,7 +890,7 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
                     <h3 className="text-xl font-bold text-blue-900 uppercase">Final Examination Time Table - {schoolClass}</h3>
                     <div className="flex gap-2">
                         <button onClick={onSave} className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm shadow hover:bg-blue-700">Save Table</button>
-                        <button className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm shadow hover:bg-green-700">Share PDF</button>
+                        <button onClick={handleSharePDF} className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm shadow hover:bg-green-700">Share PDF</button>
                     </div>
                 </div>
                 
@@ -880,87 +982,147 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
             </div>
             
             {!isExaminationTimeTable && managementTab === 'config' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="bg-blue-50 p-4 rounded border border-blue-100 shadow-inner"><h4 className="font-bold text-blue-900 mb-4 uppercase text-sm border-b pb-1">Subject Period Demands (Per Week)</h4><div className="grid grid-cols-2 gap-4">{subjects.map(sub => (<div key={sub} className="flex justify-between items-center"><label className="text-xs font-bold text-gray-700">{sub}</label><input type="number" min="0" max="10" value={demands[sub] || 0} onChange={(e) => handleDemandChange(sub, parseInt(e.target.value))} className="w-16 border rounded p-1 text-center font-bold" /></div>))}</div></div><div className="space-y-6"><div className="bg-yellow-50 p-4 rounded border border-yellow-200"><h4 className="font-bold text-yellow-900 mb-4 uppercase text-sm border-b pb-1">Fixed Activity Constraints</h4><div className="space-y-2"><label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.worship || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, worship: e.target.checked})} /> Worship (Monday Period 1)</label><label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.singingHymns || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, singingHymns: e.target.checked})} /> Singing/Hymns</label><label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.plc || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, plc: e.target.checked})} /> PLC Meeting (Wednesday Period 7)</label><label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.club || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, club: e.target.checked})} /> Club Activity (Friday Period 7)</label><label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.extraTuitionActive || false} onChange={e => handleConstraintChange('extraTuitionActive', e.target.checked)} /> Enable Extra Tuition Slot (8th Period)</label></div></div><div className="bg-gray-100 p-4 rounded border border-gray-200"><h4 className="font-bold text-gray-700 mb-2 uppercase text-sm">Generator</h4><p className="text-xs text-gray-500 mb-4">Automatically distribute subjects into the grid based on demands and constraints.</p><button onClick={generateTimetable} className="w-full bg-blue-600 text-white font-bold py-2 rounded shadow hover:bg-blue-700">Auto-Generate Timetable</button></div></div></div>
-            )}
-            {!isExaminationTimeTable && managementTab === 'grid' && (
-                <div className="overflow-x-auto border rounded bg-white shadow-inner">
-                    <table className="w-full text-sm border-collapse table-fixed min-w-[800px]">
-                        <thead className="bg-gray-800 text-white">
-                            <tr>
-                                <th className="p-3 w-16 text-center">No.</th>
-                                <th className="p-3 w-32 text-center border-l border-gray-700">Timing (Start-Stop)</th>
-                                {DAYS.map(d => <th key={d} className="p-3 text-center border-l border-gray-700">{d}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {Array.from({ length: constraints.extraTuitionActive ? 8 : 7 }).map((_, pIdx) => (
-                                <tr key={pIdx} className="border-b hover:bg-gray-50">
-                                    <td className="p-2 text-center font-bold bg-gray-100 border-r text-gray-700">{pIdx === 7 ? 'Extra' : pIdx + 1}</td>
-                                    <td className="p-2 text-center border-r bg-gray-50">
-                                        <div className="flex flex-col gap-1 items-center">
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase w-4 text-left">S:</span>
-                                                <input 
-                                                    type="time" 
-                                                    value={grid['Monday']?.[pIdx]?.startTime || ''} 
-                                                    onChange={(e) => {
-                                                        DAYS.forEach(day => handleGridChange(day, pIdx, 'startTime', e.target.value));
-                                                    }}
-                                                    className="text-[10px] border rounded p-0.5 w-full font-mono bg-white"
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase w-4 text-left">E:</span>
-                                                <input 
-                                                    type="time" 
-                                                    value={grid['Monday']?.[pIdx]?.endTime || ''} 
-                                                    onChange={(e) => {
-                                                        DAYS.forEach(day => handleGridChange(day, pIdx, 'endTime', e.target.value));
-                                                    }}
-                                                    className="text-[10px] border rounded p-0.5 w-full font-mono bg-white"
-                                                />
-                                            </div>
-                                        </div>
-                                    </td>
-                                    {DAYS.map(day => { 
-                                        const slot: BasicSlotData = grid[day]?.[pIdx] || { type: 'Lesson', subject: '' }; 
-                                        const isFixed = slot.type === 'Fixed'; 
-                                        return (
-                                            <td key={day} className="p-1 border text-center align-top h-24">
-                                                {isFixed ? (
-                                                    <div className="h-full flex items-center justify-center bg-gray-200 text-gray-600 font-bold text-xs rounded">{slot.fixedLabel || slot.subject}</div>
-                                                ) : (
-                                                    <div className="flex flex-col gap-1 h-full">
-                                                        <select value={slot.subject || ''} onChange={(e) => handleGridChange(day, pIdx, 'subject', e.target.value)} className="w-full text-xs border border-gray-300 rounded p-1 font-bold text-blue-900 truncate">
-                                                            <option value="">- Subject -</option>
-                                                            {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-                                                            <option value="Break">Break</option>
-                                                        </select>
-                                                        {slot.subject && slot.subject !== 'Break' && (
-                                                            <div className="text-[10px] text-gray-500 bg-gray-50 p-1 rounded border border-gray-100 truncate">{slot.facilitatorId || 'TBA'}</div>
-                                                        )}
-                                                        {slot.subject === 'Break' && (
-                                                            <div className="flex-1 bg-yellow-100 rounded flex items-center justify-center text-xs font-bold text-yellow-700 uppercase">Break</div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        ); 
-                                    })}
-                                </tr>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-blue-50 p-4 rounded border border-blue-100 shadow-inner">
+                        <h4 className="font-bold text-blue-900 mb-4 uppercase text-sm border-b pb-1">Subject Period Demands (Per Week)</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            {subjects.map(sub => (
+                                <div key={sub} className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-gray-700">{sub}</label>
+                                    <input type="number" min="0" max="10" value={demands[sub] || 0} onChange={(e) => handleDemandChange(sub, parseInt(e.target.value))} className="w-16 border rounded p-1 text-center font-bold" />
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
-                    <div className="p-4 flex justify-end no-print">
-                        <button onClick={onSave} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 shadow transition-all">Save Grid Changes</button>
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
+                            <h4 className="font-bold text-yellow-900 mb-4 uppercase text-sm border-b pb-1">Fixed Activity Constraints</h4>
+                            <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.worship || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, worship: e.target.checked})} /> Worship (Monday Period 1)</label>
+                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.singingHymns || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, singingHymns: e.target.checked})} /> Singing/Hymns</label>
+                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.plc || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, plc: e.target.checked})} /> PLC Meeting (Wednesday Period 7)</label>
+                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.club || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, club: e.target.checked})} /> Club Activity (Friday Period 7)</label>
+                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.extraTuitionActive || false} onChange={e => handleConstraintChange('extraTuitionActive', e.target.checked)} /> Enable Extra Tuition Slot (8th Period)</label>
+                            </div>
+                        </div>
+                        <div className="bg-gray-100 p-4 rounded border border-gray-200">
+                            <h4 className="font-bold text-gray-700 mb-2 uppercase text-sm">Generator</h4>
+                            <p className="text-xs text-gray-500 mb-4">Automatically distribute subjects into the grid based on demands and constraints.</p>
+                            <button onClick={generateTimetable} className="w-full bg-blue-600 text-white font-bold py-2 rounded shadow hover:bg-blue-700 transition-colors">Auto-Generate Timetable</button>
+                        </div>
                     </div>
                 </div>
             )}
-            {!isExaminationTimeTable && managementTab === 'compliance' && (
-                <div className="p-4"><div className="bg-red-50 p-4 border-l-4 border-red-500 mb-6 text-sm text-red-900 shadow-sm"><strong>Facilitator Compliance Desk:</strong> Verify lesson execution against the planned timetable.</div></div>
+            {!isExaminationTimeTable && (managementTab === 'grid' || managementTab === 'compliance') && (
+                <div className="flex flex-col gap-4">
+                    <div className="flex justify-end gap-2 no-print">
+                        <button onClick={handleSharePDF} disabled={isGeneratingPDF} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 shadow text-sm">
+                            {isGeneratingPDF ? 'Generating...' : 'Share PDF Report'}
+                        </button>
+                        <button onClick={onSave} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 shadow text-sm">Save All Changes</button>
+                    </div>
+
+                    <div id="timetable-print-area" className="bg-white p-8 border rounded shadow-inner">
+                        {/* Report Header */}
+                        <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
+                            <h1 className="text-2xl font-black uppercase text-blue-900">
+                                <EditableField value={settings.schoolName} onChange={(v) => onSettingChange('schoolName', v)} className="text-center w-full bg-transparent" />
+                            </h1>
+                            <div className="flex justify-center gap-4 text-xs font-bold text-gray-600 mb-1">
+                                <EditableField value={settings.schoolAddress || ''} onChange={(v) => onSettingChange('schoolAddress', v)} className="text-center w-full" placeholder="Address" />
+                            </div>
+                            <div className="flex justify-center gap-4 text-[10px] font-semibold text-gray-800 mb-2">
+                                <div className="flex gap-1"><span>Tel:</span><EditableField value={settings.schoolContact} onChange={(v) => onSettingChange('schoolContact', v)} /></div>
+                                <span>|</span>
+                                <div className="flex gap-1"><span>Email:</span><EditableField value={settings.schoolEmail} onChange={(v) => onSettingChange('schoolEmail', v)} /></div>
+                            </div>
+                            <h2 className="text-lg font-bold text-red-700 uppercase">CLASS TIME TABLE - {schoolClass}</h2>
+                            <p className="text-xs font-bold text-gray-500 uppercase">{settings.termInfo} | {settings.academicYear}</p>
+                        </div>
+
+                        <div className="overflow-x-auto border rounded bg-white shadow-inner">
+                            <table className="w-full text-sm border-collapse table-fixed min-w-[800px]">
+                                <thead className="bg-gray-800 text-white">
+                                    <tr>
+                                        <th className="p-3 w-16 text-center">No.</th>
+                                        <th className="p-3 w-32 text-center border-l border-gray-700">Timing</th>
+                                        {DAYS.map(d => <th key={d} className="p-3 text-center border-l border-gray-700">{d}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Array.from({ length: constraints.extraTuitionActive ? 8 : 7 }).map((_, pIdx) => (
+                                        <tr key={pIdx} className="border-b hover:bg-gray-50">
+                                            <td className="p-2 text-center font-bold bg-gray-100 border-r text-gray-700">{pIdx === 7 ? 'Extra' : pIdx + 1}</td>
+                                            <td className="p-2 text-center border-r bg-gray-50">
+                                                <div className="flex flex-col gap-1 items-center">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase w-4 text-left">S:</span>
+                                                        <input 
+                                                            type="time" 
+                                                            value={grid['Monday']?.[pIdx]?.startTime || ''} 
+                                                            onChange={(e) => DAYS.forEach(day => handleGridChange(day, pIdx, 'startTime', e.target.value))}
+                                                            className="text-[10px] border rounded p-0.5 w-full font-mono bg-white"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase w-4 text-left">E:</span>
+                                                        <input 
+                                                            type="time" 
+                                                            value={grid['Monday']?.[pIdx]?.endTime || ''} 
+                                                            onChange={(e) => DAYS.forEach(day => handleGridChange(day, pIdx, 'endTime', e.target.value))}
+                                                            className="text-[10px] border rounded p-0.5 w-full font-mono bg-white"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            {DAYS.map(day => { 
+                                                const slot: BasicSlotData = grid[day]?.[pIdx] || { type: 'Lesson', subject: '' }; 
+                                                const isFixed = slot.type === 'Fixed'; 
+                                                return (
+                                                    <td key={day} className={`p-1 border text-center align-top h-24 ${isFixed ? 'bg-gray-50' : ''}`}>
+                                                        {isFixed ? (
+                                                            <div className="h-full flex items-center justify-center bg-gray-200 text-gray-600 font-bold text-xs rounded uppercase">{slot.fixedLabel || slot.subject}</div>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1 h-full">
+                                                                <select value={slot.subject || ''} onChange={(e) => handleGridChange(day, pIdx, 'subject', e.target.value)} className="w-full text-[10px] border border-gray-300 rounded p-1 font-bold text-blue-900 truncate bg-transparent no-print-appearance">
+                                                                    <option value="">- Subject -</option>
+                                                                    {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                    <option value="Break">Break</option>
+                                                                </select>
+                                                                {/* Print specific text for subjects because selects don't print well */}
+                                                                <div className="hidden print:block font-black text-blue-900 text-xs uppercase">{slot.subject || '-'}</div>
+                                                                
+                                                                {slot.subject && slot.subject !== 'Break' && (
+                                                                    <div className="text-[10px] text-gray-500 bg-gray-50 p-1 rounded border border-gray-100 truncate">{slot.facilitatorId || 'TBA'}</div>
+                                                                )}
+                                                                {slot.subject === 'Break' && (
+                                                                    <div className="flex-1 bg-yellow-100 rounded flex items-center justify-center text-xs font-bold text-yellow-700 uppercase">Break</div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                ); 
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="mt-8 pt-4 flex justify-between print:mt-12">
+                                <div className="text-center w-1/3">
+                                    <div className="border-b border-black mb-1"></div>
+                                    <p className="text-[10px] font-bold">Class Teacher</p>
+                                </div>
+                                <div className="text-center w-1/3">
+                                    <div className="border-b border-black mb-1"></div>
+                                    <p className="text-[10px] font-bold">Headteacher's Signature & Stamp</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
             
-            {(isExaminationTimeTable || managementTab === 'exam_generator') && (
+            {isExaminationTimeTable && (
                 <div className="space-y-8">
                     {managementTab === 'exam_generator' && renderExamTimetableGenerator()}
                     {renderExamScheduleView()}
@@ -971,7 +1133,7 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
 };
 
 
-// --- DAILY ASSESSMENT VIEW (Omitted for brevity as no changes requested there) ---
+// --- DAILY ASSESSMENT VIEW ---
 const DailyAssessmentView: React.FC<{ settings: GlobalSettings; onSettingChange: any; students: StudentData[]; setStudents: any; subjectList: string[]; schoolClass: string }> = ({ settings, onSettingChange, students, setStudents, subjectList, schoolClass }) => {
     const [selectedSubject, setSelectedSubject] = useState(subjectList[0] || "");
     const [newColumn, setNewColumn] = useState<Partial<AssessmentColumn>>({ label: '', maxScore: 10, date: new Date().toISOString().split('T')[0] });
@@ -1014,7 +1176,7 @@ const DailyAssessmentView: React.FC<{ settings: GlobalSettings; onSettingChange:
                     {subjectList.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
             </div>
-            <div className="bg-gray-50 p-4 rounded border mb-4 flex gap-4 items-end flex-wrap">
+            <div className="bg-gray-50 p-4 rounded border mb-4 flex gap-4 items-end flex-wrap no-print">
                 <div><label className="block text-xs font-bold text-gray-500">Date</label><input type="date" value={newColumn.date} onChange={e => setNewColumn({...newColumn, date: e.target.value})} className="border p-1.5 rounded text-sm w-32" /></div>
                 <div className="flex-1 min-w-[200px]"><label className="block text-xs font-bold text-gray-500">Indicator / Topic</label><input type="text" value={newColumn.label} onChange={e => setNewColumn({...newColumn, label: e.target.value})} className="border p-1.5 rounded text-sm w-full" placeholder="e.g. Dictation" /></div>
                 <div><label className="block text-xs font-bold text-gray-500">Max Score</label><input type="number" value={newColumn.maxScore} onChange={e => setNewColumn({...newColumn, maxScore: parseInt(e.target.value)})} className="border p-1.5 rounded text-sm w-20 text-center" /></div>
@@ -1052,7 +1214,7 @@ const DailyAssessmentView: React.FC<{ settings: GlobalSettings; onSettingChange:
     );
 };
 
-// --- SBA VIEW (Omitted for brevity as no changes requested there) ---
+// --- SBA VIEW ---
 const SBAView: React.FC<{ settings: GlobalSettings; onSettingChange: any; students: StudentData[]; setStudents: any; subjectList: string[]; schoolClass: string }> = ({ settings, onSettingChange, students, setStudents, subjectList, schoolClass }) => {
     const [selectedSubject, setSelectedSubject] = useState(subjectList[0] || "");
     const defaultCAT: SBACAT = { id: 'CAT1', label: 'CAT 1', type: 'Individual', maxScore: 15, weight: 30, date: '', questionType: 'Objective' };
