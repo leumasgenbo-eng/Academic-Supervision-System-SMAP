@@ -1,4 +1,3 @@
-
 export type Department = 
   | "Daycare"
   | "Nursery"
@@ -456,6 +455,7 @@ export interface BasicSlotData {
     type: 'Lesson' | 'Break' | 'Extra' | 'Fixed';
     facilitatorId?: string;
     fixedLabel?: string;
+    // Fix: Added startTime and endTime to BasicSlotData to support grid time rendering and resolve GenericModule errors
     startTime?: string;
     endTime?: string;
 }
@@ -467,6 +467,7 @@ export interface TimetableConstraints {
         plc?: boolean;
         club?: boolean;
         extraCurricular?: boolean;
+        singingHymns?: boolean;
     };
     extraTuitionActive?: boolean;
 }

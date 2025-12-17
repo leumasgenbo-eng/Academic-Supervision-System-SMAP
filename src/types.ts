@@ -1,5 +1,3 @@
-
-
 export type Department = 
   | "Daycare"
   | "Nursery"
@@ -316,6 +314,9 @@ export interface DaycareSlotData {
     detail?: string;
     tlm?: string;
     remark?: string;
+    // Fix: Added startTime and endTime for alignment with root types.ts
+    startTime?: string;
+    endTime?: string;
     timeOverride?: string;
 }
 
@@ -329,6 +330,9 @@ export interface BasicSlotData {
     type: 'Lesson' | 'Break' | 'Extra' | 'Fixed';
     facilitatorId?: string;
     fixedLabel?: string;
+    // Fix: Added startTime and endTime to BasicSlotData to support grid rendering and resolve GenericModule errors
+    startTime?: string;
+    endTime?: string;
 }
 
 export interface TimetableConstraints {
@@ -371,7 +375,8 @@ export interface ObservationTask {
 export interface ClassTimetableData {
     daycare?: DaycareTimetable;
     grid?: Record<string, Record<string, BasicSlotData>>;
-    periods?: { time: string; label: string }[];
+    // Fix: Added startTime and endTime to alignment with root types.ts
+    periods?: { time: string; label: string; startTime?: string; endTime?: string }[];
     subjectDemands?: Record<string, number>;
     constraints?: TimetableConstraints;
     complianceLogs?: Record<string, ComplianceLog[]>; 
