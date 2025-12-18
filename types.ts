@@ -462,6 +462,7 @@ export interface BasicSlotData {
 
 export interface TimetableConstraints {
     partTimeAvailability?: Record<string, string[]>;
+    rowCount?: number; // Adjustable row count
     fixedActivities?: {
         worship?: boolean;
         plc?: boolean;

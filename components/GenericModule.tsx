@@ -397,7 +397,7 @@ const DaycareObservationSchedule: React.FC<{ settings: GlobalSettings; onSetting
         type: p.type 
     }));
 
-    const updateRow = (idx: number, field: string, value: string) => {
+    const updateRow = (idx: number, field: string, value: any) => {
         const newRows = [...rows];
         newRows[idx] = { ...newRows[idx], [field]: value };
         const newTimetable = { ...currentTimetable, periods: newRows };
@@ -421,7 +421,12 @@ const DaycareObservationSchedule: React.FC<{ settings: GlobalSettings; onSetting
     return (
         <div className="bg-white p-6 rounded shadow-md min-h-[800px]">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-purple-900 uppercase">Observation Schedule</h2>
+                <div>
+                   <h2 className="text-2xl font-bold text-purple-900 uppercase">Observation Schedule</h2>
+                   <div className="text-[10px] font-black uppercase text-blue-900 tracking-tighter">
+                       <EditableField value={settings.schoolName} onChange={(v) => onSettingChange('schoolName', v)} className="w-full bg-transparent" />
+                   </div>
+                </div>
                 <div className="flex gap-2 items-center">
                     <label className="text-sm font-bold text-gray-600">Observation Date:</label>
                     <input 
@@ -482,7 +487,11 @@ const DaycareObservationSchedule: React.FC<{ settings: GlobalSettings; onSetting
                                                 onChange={(v) => updateRow(idx, 'label', v)} 
                                                 className="w-full font-bold text-purple-800"
                                             />
-                                            <select className="w-full border p-1 rounded text-[10px] bg-white font-semibold">
+                                            <select 
+                                                className="w-full border p-1 rounded text-[10px] bg-white font-semibold"
+                                                value={period.indicator || ''}
+                                                onChange={(e) => updateRow(idx, 'indicator', e.target.value)}
+                                            >
                                                 <option value="">Select Indicator (Optional)...</option>
                                                 {DAYCARE_ACTIVITY_GROUPS.map(g => (
                                                     <optgroup key={g.group} label={g.group}>
@@ -496,20 +505,35 @@ const DaycareObservationSchedule: React.FC<{ settings: GlobalSettings; onSetting
                                     )}
                                 </td>
                                 <td className="p-3 border">
-                                    <select className="w-full border p-1 rounded text-xs bg-white">
+                                    <select 
+                                        className="w-full border p-1 rounded text-xs bg-white"
+                                        value={period.venue || ''}
+                                        onChange={(e) => updateRow(idx, 'venue', e.target.value)}
+                                    >
+                                        <option value="">Select Venue...</option>
                                         {SCHOOL_VENUES.map(v => <option key={v} value={v}>{v}</option>)}
                                     </select>
                                 </td>
                                 <td className="p-3 border">
-                                    <select className="w-full border p-1 rounded text-xs bg-white">
-                                        <option value="Class Facilitator">Class Facilitator (Default)</option>
+                                    <select 
+                                        className="w-full border p-1 rounded text-xs bg-white"
+                                        value={period.observerId || ''}
+                                        onChange={(e) => updateRow(idx, 'observerId', e.target.value)}
+                                    >
+                                        <option value="">Class Facilitator (Default)</option>
                                         {observers.map(o => (
                                             <option key={o.id} value={o.id}>{o.name} ({o.role})</option>
                                         ))}
                                     </select>
                                 </td>
                                 <td className="p-3 border">
-                                    <input type="text" placeholder="Pupils..." className="w-full border p-1 rounded text-xs" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Pupils..." 
+                                        className="w-full border p-1 rounded text-xs" 
+                                        value={period.observedPupils || ''}
+                                        onChange={(e) => updateRow(idx, 'observedPupils', e.target.value)}
+                                    />
                                 </td>
                                 <td className="p-1 border text-center no-print">
                                     <button onClick={() => deleteRow(idx)} className="text-red-300 hover:text-red-600 font-bold p-1">✕</button>
@@ -617,6 +641,8 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
     const constraints = currentTimetable.constraints || {};
     const subjects = BASIC_SUBJECT_LIST;
 
+    const rowCount = constraints.rowCount || (constraints.extraTuitionActive ? 8 : 7);
+
     const handleDemandChange = (sub: string, val: number) => {
         const newDemands = { ...demands, [sub]: val };
         updateTimetableState({ subjectDemands: newDemands });
@@ -646,7 +672,7 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
     };
 
     const generateTimetable = () => {
-        const totalPeriodsPerDay = constraints.extraTuitionActive ? 8 : 7;
+        const totalPeriodsPerDay = rowCount;
         const newGrid: Record<string, Record<number, BasicSlotData>> = {};
         
         // 1. Initialize empty grid
@@ -667,15 +693,15 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
             newGrid['Tuesday'][0] = { type: 'Fixed', subject: 'Singing/Hymns', fixedLabel: 'Singing/Hymns' };
         }
         // PLC Meeting: Wednesday P7
-        if (constraints.fixedActivities?.plc) {
+        if (constraints.fixedActivities?.plc && totalPeriodsPerDay >= 7) {
             newGrid['Wednesday'][6] = { type: 'Fixed', subject: 'PLC Meeting', fixedLabel: 'PLC Meeting' };
         }
         // Club Activity: Friday P7
-        if (constraints.fixedActivities?.club) {
+        if (constraints.fixedActivities?.club && totalPeriodsPerDay >= 7) {
             newGrid['Friday'][6] = { type: 'Fixed', subject: 'Club Activity', fixedLabel: 'Club Activity' };
         }
         // Extra Tuition: P8 if active
-        if (constraints.extraTuitionActive) {
+        if (constraints.extraTuitionActive && totalPeriodsPerDay >= 8) {
             DAYS.forEach(day => {
                 newGrid[day][7] = { type: 'Fixed', subject: 'Extra Tuition', fixedLabel: 'Extra Tuition' };
             });
@@ -699,8 +725,8 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
         let poolIdx = 0;
         DAYS.forEach(day => {
             for (let i = 0; i < totalPeriodsPerDay; i++) {
-                // Only fill if not already fixed or a break (P4 usually break)
-                if (i === 3) {
+                // Only fill if not already fixed or a break (P4 usually break if enough rows)
+                if (i === 3 && totalPeriodsPerDay > 4) {
                    newGrid[day][i] = { type: 'Fixed', subject: 'Break', fixedLabel: 'Break' };
                    continue;
                 }
@@ -996,13 +1022,33 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
                     </div>
                     <div className="space-y-6">
                         <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
-                            <h4 className="font-bold text-yellow-900 mb-4 uppercase text-sm border-b pb-1">Fixed Activity Constraints</h4>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.worship || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, worship: e.target.checked})} /> Worship (Monday Period 1)</label>
-                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.singingHymns || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, singingHymns: e.target.checked})} /> Singing/Hymns</label>
-                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.plc || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, plc: e.target.checked})} /> PLC Meeting (Wednesday Period 7)</label>
-                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.club || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, club: e.target.checked})} /> Club Activity (Friday Period 7)</label>
-                                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.extraTuitionActive || false} onChange={e => handleConstraintChange('extraTuitionActive', e.target.checked)} /> Enable Extra Tuition Slot (8th Period)</label>
+                            <h4 className="font-bold text-yellow-900 mb-4 uppercase text-sm border-b pb-1">Timetable Configuration</h4>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between bg-white p-2 rounded border shadow-sm">
+                                    <span className="text-xs font-bold text-gray-700 uppercase">Number of Periods:</span>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => handleConstraintChange('rowCount', Math.max(1, rowCount - 1))}
+                                            className="w-8 h-8 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 font-bold text-lg transition-colors"
+                                        >
+                                            -
+                                        </button>
+                                        <span className="font-bold text-blue-900 w-6 text-center">{rowCount}</span>
+                                        <button 
+                                            onClick={() => handleConstraintChange('rowCount', rowCount + 1)}
+                                            className="w-8 h-8 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 font-bold text-lg transition-colors"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 border-t pt-2">
+                                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.worship || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, worship: e.target.checked})} /> Worship (Monday Period 1)</label>
+                                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.singingHymns || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, singingHymns: e.target.checked})} /> Singing/Hymns</label>
+                                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.plc || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, plc: e.target.checked})} /> PLC Meeting (Wednesday Period 7)</label>
+                                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.fixedActivities?.club || false} onChange={e => handleConstraintChange('fixedActivities', {...constraints.fixedActivities, club: e.target.checked})} /> Club Activity (Friday Period 7)</label>
+                                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer"><input type="checkbox" checked={constraints.extraTuitionActive || false} onChange={e => handleConstraintChange('extraTuitionActive', e.target.checked)} /> Enable Extra Tuition Slot (8th Period)</label>
+                                </div>
                             </div>
                         </div>
                         <div className="bg-gray-100 p-4 rounded border border-gray-200">
@@ -1050,9 +1096,9 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {Array.from({ length: constraints.extraTuitionActive ? 8 : 7 }).map((_, pIdx) => (
+                                    {Array.from({ length: rowCount }).map((_, pIdx) => (
                                         <tr key={pIdx} className="border-b hover:bg-gray-50">
-                                            <td className="p-2 text-center font-bold bg-gray-100 border-r text-gray-700">{pIdx === 7 ? 'Extra' : pIdx + 1}</td>
+                                            <td className="p-2 text-center font-bold bg-gray-100 border-r text-gray-700">{pIdx === 7 && constraints.extraTuitionActive ? 'Extra' : pIdx + 1}</td>
                                             <td className="p-2 text-center border-r bg-gray-50">
                                                 <div className="flex flex-col gap-1 items-center">
                                                     <div className="flex items-center gap-1">
