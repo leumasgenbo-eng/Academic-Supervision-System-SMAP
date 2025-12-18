@@ -18,6 +18,26 @@ export const NATURE_OF_QUESTIONS = [
     { label: "Complex", value: 5 }
 ];
 
+export const DISCIPLINARY_CATEGORIES = [
+    "Lateness", "Absenteeism", "Bullying", "Disrespect", "Vandalism", 
+    "Theft", "Dishonesty", "Fighting", "Dress Code Violation", 
+    "Insubordination", "Electronic Device Usage", "Classroom Disruption"
+];
+
+export const DISCIPLINARY_LOCATIONS = [
+    "Classroom", "Playground", "Dormitory", "Corridor", "Dining Hall", 
+    "Library", "Field", "Assembly Ground", "Washroom", "Office Area"
+];
+
+export const DISCIPLINARY_REFERRALS = [
+    "Class Teacher", "Counselor", "Discipline Committee", "Head Teacher", "Assistant Head", "Director"
+];
+
+export const CORRECTIVE_MEASURES = [
+    "Verbal Warning", "Written Warning", "Guidance & Counseling", "Detention", 
+    "Community Service", "Parent Consultation", "Internal Suspension", "Final Warning"
+];
+
 export const DAYCARE_REMARKS = [
     "Completed Successfully",
     "Partially Completed",
@@ -35,7 +55,6 @@ export const DAYCARE_REMARKS = [
     "Work Sent Home"
 ];
 
-// Detailed Groups for Indicators (Assessment - Populated from user request)
 export const DAYCARE_ACTIVITY_GROUPS = [
     {
         group: "ENJOY RUNNING AND CLIMBING (Physical/outdoor movement)",
@@ -136,7 +155,6 @@ export const DAYCARE_ACTIVITY_GROUPS = [
     }
 ];
 
-// Specific Groups for Time Table Generation (Populated from user request)
 export const DAYCARE_TIMETABLE_GROUPS = [
     { 
         group: "Language & Literacy", 
@@ -200,7 +218,6 @@ export const SCHOOL_VENUES = [
   "Computer Lab", "Sick Bay", "Main Field", "Sand Pit", "Water Play Area"
 ];
 
-// Updated Daycare Period Config
 export const DAYCARE_PERIOD_CONFIG = [
     { id: "L0", label: "Arrival & Settling", defaultTime: "07:30 - 08:00", type: "Routine" },
     { id: "L1", label: "Circle Time", defaultTime: "08:30 - 09:25", type: "Lesson" },
@@ -216,7 +233,6 @@ export const DAYCARE_PERIOD_CONFIG = [
 
 export const DAYCARE_PERIODS = DAYCARE_PERIOD_CONFIG.map(p => p.id);
 
-// --- ACADEMIC CALENDAR LISTS ---
 export const CALENDAR_LISTS = {
     periods: [
         "Reopening Week", "Week 1", "Week 2", "Week 3", "Week 4", "Week 5", 
@@ -275,12 +291,11 @@ export const BASIC_SUBJECT_LIST = [
 
 export const DAYCARE_SUBJECTS = ["Language & Literacy", "Numeracy", "Our World Our People", "Creative Arts"];
 
-// Helper to get subjects based on Department
 export const getSubjectsForDepartment = (dept: Department): string[] => {
     if (dept === "Daycare" || dept === "Nursery" || dept === "Kindergarten") return DAYCARE_SUBJECTS;
     if (dept === "Junior High School") return JHS_SUBJECT_LIST;
     if (dept === "Lower Basic School" || dept === "Upper Basic School") return BASIC_SUBJECT_LIST;
-    return JHS_SUBJECT_LIST; // Default fallback
+    return JHS_SUBJECT_LIST; 
 };
 
 export const SUBJECT_LIST = JHS_SUBJECT_LIST; 
@@ -310,7 +325,6 @@ export const MODULES: Module[] = [
   "Exercise Assessment"
 ];
 
-// Constants for scales
 export const EC_CORE_SCALE_3_POINT: CoreGradingScale = {
     type: '3-point',
     ranges: [
@@ -390,7 +404,6 @@ export const DAYCARE_ACTIVITIES_LIST = [
     "Story Time", "Closing", "Snack Break", "Lunch Break", "Worship", "Physical Education"
 ];
 
-// Grouped mapping mainly for Time Table usage
 export const DAYCARE_DETAILS_GROUPED = {
     "Language & Literacy": DAYCARE_TIMETABLE_GROUPS.find(g => g.group === "Language & Literacy")?.activities || [],
     "Numeracy": DAYCARE_TIMETABLE_GROUPS.find(g => g.group === "Numeracy")?.activities || [],
@@ -410,7 +423,6 @@ export const DAYCARE_TLMS = [
     "Role-play Materials", "Nature Items (leaves, stones, sand)", "Construction Toys"
 ];
 
-// Alias for backward compatibility if needed, but we now use DAYCARE_TIMETABLE_GROUPS explicitly
 export const DAYCARE_ACTIVITY_GROUPS_CONST = DAYCARE_TIMETABLE_GROUPS;
 
 export const CLASS_RULES = ["Punctuality...", "Appearance..."]; 

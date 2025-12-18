@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Department, Module, SchoolClass, GlobalSettings, StudentData, ClassTimetableData, DaycareSlotData, BasicSlotData, CalendarWeek, ExamScheduleItem, ObservationTask, AssessmentColumn, SBAConfig, SBACAT } from '../types';
 import { 
@@ -8,6 +9,7 @@ import LessonPlanAssessment from './LessonPlanAssessment';
 import ExerciseAssessment from './ExerciseAssessment';
 import MaterialsLogistics from './MaterialsLogistics';
 import LearnerMaterialsBooklist from './LearnerMaterialsBooklist';
+import DisciplinaryPortal from './DisciplinaryPortal';
 import EditableField from './EditableField';
 
 interface GenericModuleProps {
@@ -1069,7 +1071,6 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
                     </div>
 
                     <div id="timetable-print-area" className="bg-white p-8 border rounded shadow-inner">
-                        {/* Report Header */}
                         <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
                             <h1 className="text-2xl font-black uppercase text-blue-900">
                                 <EditableField value={settings.schoolName} onChange={(v) => onSettingChange('schoolName', v)} className="text-center w-full bg-transparent" />
@@ -1135,7 +1136,6 @@ const ManagementDesk: React.FC<{ settings: GlobalSettings; onSettingChange: any;
                                                                     {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                                                                     <option value="Break">Break</option>
                                                                 </select>
-                                                                {/* Print specific text for subjects because selects don't print well */}
                                                                 <div className="hidden print:block font-black text-blue-900 text-xs uppercase">{slot.subject || '-'}</div>
                                                                 
                                                                 {slot.subject && slot.subject !== 'Break' && (
@@ -1294,8 +1294,8 @@ const GenericModule: React.FC<GenericModuleProps> = ({ department, schoolClass, 
   const isExerciseAssessment = module === 'Exercise Assessment';
   const isMaterialsLogistics = module === 'Materials & Logistics';
   const isLearnerMaterials = module === 'Learner Materials & Booklist';
+  const isDisciplinary = module === 'Disciplinary';
   
-  // New flags for subject management
   const isSubjectList = module === 'Subject List' || module === 'Learning Area / Subject';
 
   const subjectList = getSubjectsForDepartment(department);
@@ -1307,6 +1307,18 @@ const GenericModule: React.FC<GenericModuleProps> = ({ department, schoolClass, 
               onSettingChange={onSettingChange} 
               department={department}
               onSave={onSave}
+          />
+      );
+  }
+
+  if (isDisciplinary) {
+      return (
+          <DisciplinaryPortal 
+            settings={settings || {} as any} 
+            onSettingChange={onSettingChange!} 
+            students={students} 
+            onSave={onSave!} 
+            schoolClass={schoolClass} 
           />
       );
   }

@@ -1,3 +1,4 @@
+
 export type Department = 
   | "Daycare"
   | "Nursery"
@@ -127,7 +128,37 @@ export interface StudentData {
     materialStatus?: Record<string, { issued: boolean, date: string, condition: string }>;
 }
 
-// --- BOOKLIST & MATERIALS TYPES ---
+export interface DisciplinaryRecord {
+    id: string;
+    refNumber: string;
+    incidentDate: string;
+    incidentTime: string;
+    location: string;
+    pupilId: string | number;
+    pupilName: string;
+    pupilClass: string;
+    pupilAge?: string;
+    pupilGender?: string;
+    category: string;
+    description: string;
+    severity: 'Minor' | 'Moderate' | 'Major';
+    witnesses: string;
+    reportedBy: string;
+    immediateAction: string;
+    actionResponsible: string;
+    actionDateTime: string;
+    referredTo: string;
+    referralDate: string;
+    followUpAction: string;
+    parentNotified: boolean;
+    parentNotificationDate: string;
+    outcome: string;
+    correctiveActionApplied: string;
+    improvementPlan: string;
+    status: 'Open' | 'Under Review' | 'Closed';
+    closureDate?: string;
+    remarks: string;
+}
 
 export interface BooklistItem {
     id: string;
@@ -280,6 +311,10 @@ export interface StaffTrainingLog {
     outcome?: string;
 }
 
+/**
+ * Fix: Added ExamScheduleItem interface which was missing in this types file
+ * but required by components/GenericModule.tsx and components/StaffManagement.tsx
+ */
 export interface ExamScheduleItem {
     id: string;
     date: string;
@@ -358,8 +393,6 @@ export interface ExerciseAssessmentRecord {
     isLateSubmission: boolean;
 }
 
-// --- LOGISTICS TYPES (Expanded) ---
-
 export interface MaterialRequest {
     id: string;
     staffId: string;
@@ -374,8 +407,6 @@ export interface MaterialRequest {
     priority: 'Low' | 'Medium' | 'High';
     remarks: string;
     status: 'Pending' | 'Approved' | 'Issued' | 'Returned' | 'Declined';
-
-    // Supply Info
     approvedQuantity?: number;
     approvalDate?: string;
     approvedBy?: string;
@@ -384,8 +415,6 @@ export interface MaterialRequest {
     suppliedBy?: string;
     conditionOnSupply?: 'New' | 'Good' | 'Fair' | 'Poor';
     expectedReturnDate?: string;
-
-    // Return Info
     quantityReturned?: number;
     dateReturned?: string;
     conditionOnReturn?: 'Good' | 'Damaged' | 'Lost';
@@ -455,14 +484,13 @@ export interface BasicSlotData {
     type: 'Lesson' | 'Break' | 'Extra' | 'Fixed';
     facilitatorId?: string;
     fixedLabel?: string;
-    // Fix: Added startTime and endTime to BasicSlotData to support grid time rendering and resolve GenericModule errors
     startTime?: string;
     endTime?: string;
 }
 
 export interface TimetableConstraints {
     partTimeAvailability?: Record<string, string[]>;
-    rowCount?: number; // Adjustable row count
+    rowCount?: number; 
     fixedActivities?: {
         worship?: boolean;
         plc?: boolean;
@@ -507,6 +535,9 @@ export interface ClassTimetableData {
     constraints?: TimetableConstraints;
     complianceLogs?: Record<string, ComplianceLog[]>; 
     observationSchedule?: ObservationTask[]; 
+    /**
+     * Fix: Updated any[] to ExamScheduleItem[] for consistency and to resolve errors in GenericModule
+     */
     examSchedule?: ExamScheduleItem[];
 }
 
@@ -611,8 +642,12 @@ export interface GlobalSettings {
   staffTraining?: StaffTrainingLog[];
   
   fileRegistry?: FileRecord[];
+  disciplinaryRecords?: DisciplinaryRecord[];
   
   classTimetables?: Record<string, ClassTimetableData>;
+  /**
+   * Fix: Updated any[] to ExamScheduleItem[] to resolve import errors in StaffManagement
+   */
   examTimeTable?: ExamScheduleItem[];
   
   earlyChildhoodConfig?: EarlyChildhoodConfig;
@@ -626,12 +661,10 @@ export interface GlobalSettings {
   assessmentColumns?: Record<string, AssessmentColumn[]>;
   exerciseAssessments?: Record<string, ExerciseAssessmentRecord[]>; 
   
-  // Logistics Fields
   materialRequests?: MaterialRequest[];
   classroomInventories?: ClassroomInventory[];
   safetyInspections?: SafetyInspection[];
 
-  // Materials & Booklist
   classBooklists?: Record<string, BooklistItem[]>; 
   materialStock?: MaterialStockItem[];
   priceRecommendations?: PriceRecommendation[];
