@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { SystemConfig, GlobalSettings, StudentData, FileRecord, StaffMember, StaffLeaveRecord, StaffMovementLog } from '../types';
 import { ALL_CLASSES_FLAT } from '../constants';
@@ -226,13 +225,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
   };
 
+  // --- LEAVE OVERSTAY LOGIC ---
+  const isLeaveOverdue = (endDate: string, status: string) => {
+    if (!endDate || status === 'Completed' || status === 'Returned') return false;
+    const end = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return end < today;
+  };
+
+  const handleSendOverdueNotice = async (staffName: string) => {
+    // Attempt to find staff to get gender for correct prefix
+    const staff = settings?.staffList?.find(s => s.name === staffName);
+    const prefix = staff?.gender === 'Male' ? 'Mr.' : staff?.gender === 'Female' ? 'Mrs. / Miss' : 'Mr. / Mrs. / Miss';
+    
+    const message = `Dear ${prefix} ${staffName} your leave is over due. Kindly inform the office.`;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'UBA - Leave Overdue Notice',
+                text: message,
+            });
+        } catch (err) {
+            // Error or cancelled share
+            console.log("Share failed or cancelled", err);
+            // Fallback to clipboard
+            navigator.clipboard.writeText(message);
+            alert(`Notice Copied to Clipboard:\n\n"${message}"`);
+        }
+    } else {
+        // Fallback for browsers without share API
+        navigator.clipboard.writeText(message);
+        alert(`Notice Copied to Clipboard:\n\n"${message}"`);
+    }
+  };
+
   // --- FILE SYSTEM HANDLERS ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !onSettingChange) return;
 
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onload = () => {
           const newFile: FileRecord = {
               id: Date.now().toString(),
               name: file.name,
@@ -564,20 +599,62 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
 
               {activeHrTab === 'Leave' && renderSimpleTable(
-                  'Permission & Leave Requests', 'staffLeave', ['Staff Name', 'Type', 'Start', 'End', 'Status'],
-                  (item: StaffLeaveRecord) => (
-                      <>
-                          <td className="border p-2 font-bold">{item.staffName}</td>
-                          <td className="border p-2">{item.type}</td>
-                          <td className="border p-2">{item.startDate}</td>
-                          <td className="border p-2">{item.endDate}</td>
-                          <td className="border p-2 font-bold text-orange-600">{item.status}</td>
-                      </>
-                  ),
+                  'Permission & Leave Requests', 'staffLeave', ['Staff Name', 'Type', 'Start', 'End', 'Status', 'Action'],
+                  (item: StaffLeaveRecord) => {
+                      const overdue = isLeaveOverdue(item.endDate, item.status);
+                      return (
+                          <tr className={`hover:bg-gray-50 transition-colors ${overdue ? 'bg-red-50' : ''}`}>
+                              <td className="border p-2 font-bold flex items-center gap-2">
+                                  {item.staffName}
+                                  {overdue && <span className="bg-red-600 text-white text-[8px] font-black px-1 rounded animate-pulse">OVERSTAY</span>}
+                              </td>
+                              <td className="border p-2">{item.type}</td>
+                              <td className="border p-2">{item.startDate}</td>
+                              <td className={`border p-2 font-mono ${overdue ? 'text-red-600 font-bold' : ''}`}>{item.endDate}</td>
+                              <td className="border p-2 font-bold">
+                                  <select 
+                                    value={item.status} 
+                                    onChange={(e) => {
+                                        const newList = (settings?.staffLeave || []).map(l => l.id === item.id ? { ...l, status: e.target.value } : l);
+                                        onSettingChange?.('staffLeave', newList);
+                                    }}
+                                    className={`p-1 rounded text-xs ${item.status === 'Approved' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}
+                                  >
+                                      <option>Pending</option>
+                                      <option>Approved</option>
+                                      <option>Returned</option>
+                                      <option>Completed</option>
+                                      <option>Overstayed</option>
+                                  </select>
+                              </td>
+                              <td className="border p-2 text-center">
+                                  {overdue && (
+                                      <button 
+                                        onClick={() => handleSendOverdueNotice(item.staffName)}
+                                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-[10px] font-black uppercase shadow-sm flex items-center gap-1 mx-auto"
+                                      >
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                                          Send Notice
+                                      </button>
+                                  )}
+                              </td>
+                          </tr>
+                      );
+                  },
                   () => {
                       const name = prompt("Staff Name:");
                       if(name && onSettingChange) {
-                          const rec: StaffLeaveRecord = { id: Date.now().toString(), staffId: 'x', staffName: name, type: 'Casual', startDate: new Date().toLocaleDateString(), endDate: 'TBD', status: 'Pending' };
+                          const type = prompt("Leave Type (e.g., Casual, Sick, Annual):", "Casual");
+                          const end = prompt("Expected Return Date (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+                          const rec: StaffLeaveRecord = { 
+                              id: Date.now().toString(), 
+                              staffId: 'x', 
+                              staffName: name, 
+                              type: type || 'Casual', 
+                              startDate: new Date().toLocaleDateString(), 
+                              endDate: end || 'TBD', 
+                              status: 'Pending' 
+                          };
                           onSettingChange('staffLeave', [...(settings?.staffLeave || []), rec]);
                       }
                   }
@@ -589,7 +666,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <button onClick={() => {
                               const staff = prompt("Staff Name:");
                               if(staff && onSettingChange) {
-                                  const log: StaffMovementLog = { id: Date.now().toString(), staffId: 'x', staffName: staff, type: 'Out', time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString(), destination: 'Bank' };
+                                  const dest = prompt("Destination:");
+                                  const log: StaffMovementLog = { id: Date.now().toString(), staffId: 'x', staffName: staff, type: 'Out', time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString(), destination: dest || 'General' };
                                   onSettingChange('staffMovement', [log, ...(settings?.staffMovement || [])]);
                               }
                           }} className="bg-orange-500 text-white px-3 py-1 rounded text-xs font-bold">Log Out</button>
@@ -638,7 +716,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={onSave} 
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded font-bold text-xs shadow-md transition-all transform active:scale-95 flex items-center gap-1"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2v-4"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                     Save Branding Settings
                 </button>
             )}
@@ -652,7 +730,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           type="text" 
                           value={settings?.schoolName || ''} 
                           onChange={(e) => onSettingChange?.('schoolName', e.target.value)}
-                          className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-400"
+                          className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-400 font-bold uppercase"
                       />
                   </div>
                   <div>
